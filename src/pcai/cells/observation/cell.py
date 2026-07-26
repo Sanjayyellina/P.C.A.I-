@@ -3,55 +3,82 @@ P.C.A.I. — C-001 Observation Cell.
 
 Mission
 -------
-Register trustworthy physical observations from captured image bytes.
+Register trustworthy image observations.
 
 Authority
 ---------
-May validate, decode, measure and hash a captured frame.
+May decode image bytes, validate supported structure, hash the original bytes,
+and emit immutable FrameObservation metadata.
 
 Prohibited
 ----------
-Must not count pills, identify medicine or mutate prior observations.
+Must not assess frame quality, detect pills, count pills, identify medicine, or
+advance workflow state.
 """
 
 from __future__ import annotations
 
-from typing import Final
+from typing import Final, Protocol
 
 import cv2
 import numpy as np
-from numpy.typing import NDArray
 
 from pcai.cells.observation.contracts import FrameObservation, RegisterFrame
-from pcai.shared.errors import InvalidImageError
+from pcai.shared.errors import InvalidImageError, UnsupportedImageError
 from pcai.shared.hashing import sha256_hex
 
-EXPECTED_CHANNEL_COUNT: Final = 3
-MINIMUM_DIMENSION_PX: Final = 1
+SUPPORTED_CHANNEL_COUNT: Final[int] = 3
+MINIMUM_IMAGE_DIMENSION_PX: Final[int] = 1
 
 
-class OpenCvObservationCell:
-    """Deterministic OpenCV implementation of C-001."""
+class ObservationCell(Protocol):
+    """Public C-001 capability contract."""
 
     def register(self, command: RegisterFrame) -> FrameObservation:
         """Validate and register one immutable frame observation."""
 
-        image = self._decode_image(command.image_bytes)
-        height_px, width_px, channels = image.shape
 
-        if width_px < MINIMUM_DIMENSION_PX or height_px < MINIMUM_DIMENSION_PX:
+class OpenCvObservationCell:
+    """OpenCV-backed deterministic implementation of C-001."""
+
+    def register(self, command: RegisterFrame) -> FrameObservation:
+        if not command.image_bytes:
             raise InvalidImageError(
-                code="FRAME_RESOLUTION_UNSUPPORTED",
-                message="The captured frame has an unsupported resolution.",
+                code="FRAME_BYTES_EMPTY",
+                message="The captured frame contains no image bytes.",
             )
 
-        if channels != EXPECTED_CHANNEL_COUNT:
+        encoded = np.frombuffer(command.image_bytes, dtype=np.uint8)
+        image = cv2.imdecode(encoded, cv2.IMREAD_COLOR)
+
+        if image is None:
             raise InvalidImageError(
+                code="FRAME_DECODE_FAILED",
+                message="The captured frame could not be decoded as an approved image.",
+            )
+
+        if image.ndim != 3:
+            raise UnsupportedImageError(
+                code="FRAME_DIMENSIONS_UNSUPPORTED",
+                message="The decoded frame does not have the required image dimensions.",
+            )
+
+        height_px, width_px, channels = image.shape
+
+        if width_px < MINIMUM_IMAGE_DIMENSION_PX or height_px < MINIMUM_IMAGE_DIMENSION_PX:
+            raise UnsupportedImageError(
+                code="FRAME_RESOLUTION_UNSUPPORTED",
+                message="The decoded frame has an unsupported resolution.",
+            )
+
+        if channels != SUPPORTED_CHANNEL_COUNT:
+            raise UnsupportedImageError(
                 code="FRAME_CHANNELS_UNSUPPORTED",
-                message="The captured frame does not use the approved colour format.",
+                message="The decoded frame does not use the supported colour channel count.",
             )
 
         return FrameObservation(
+            observation_id=command.observation_id,
             frame_id=command.frame_id,
             object_sha256=sha256_hex(command.image_bytes),
             source_name=command.source_name,
@@ -63,22 +90,3 @@ class OpenCvObservationCell:
             camera_configuration_hash=command.camera_configuration_hash,
             calibration_version=command.calibration_version,
         )
-
-    @staticmethod
-    def _decode_image(image_bytes: bytes) -> NDArray[np.uint8]:
-        if not image_bytes:
-            raise InvalidImageError(
-                code="FRAME_BYTES_EMPTY",
-                message="The captured frame contains no image bytes.",
-            )
-
-        encoded = np.frombuffer(image_bytes, dtype=np.uint8)
-        image = cv2.imdecode(encoded, cv2.IMREAD_COLOR)
-
-        if image is None:
-            raise InvalidImageError(
-                code="FRAME_DECODE_FAILED",
-                message="The captured frame could not be decoded as an approved image.",
-            )
-
-        return image

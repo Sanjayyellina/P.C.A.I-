@@ -1,16 +1,10 @@
-"""
-P.C.A.I. shared errors.
-
-Mission
--------
-Expose stable machine-readable failure codes and safe user-facing messages.
-"""
+"""Typed P.C.A.I. domain errors."""
 
 from __future__ import annotations
 
 
 class PcaiError(Exception):
-    """Base exception for safe, typed P.C.A.I. failures."""
+    """Base exception for safe, machine-readable P.C.A.I. failures."""
 
     def __init__(self, *, code: str, message: str) -> None:
         super().__init__(message)
@@ -19,4 +13,8 @@ class PcaiError(Exception):
 
 
 class InvalidImageError(PcaiError):
-    """Raised when captured bytes cannot form an approved image observation."""
+    """Raised when image bytes or decoded image structure are invalid."""
+
+
+class UnsupportedImageError(PcaiError):
+    """Raised when a valid image falls outside the supported envelope."""
