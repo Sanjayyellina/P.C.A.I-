@@ -1,6 +1,3 @@
-Warning: truncated output (original token count: 63153)
-Total output lines: 4474
-
 ---
 title: "P.C.A.I. Architecture Bible"
 subtitle: "AI-Native, Evidence-Driven, Multi-Agent Tablet Counting, Identification, Verification and Pharmacy Intelligence Platform"
@@ -1857,7 +1854,236 @@ The `occurred_at_utc` value represents when the source claims the action occurre
 
 The initial implementation uses PostgreSQL rather than a custom event database. The logical schema includes:
 
-| Table | Purpos…3153 tokens truncated…ent:
+| Table | Purpose | Important constraints |
+|---|---|---|
+| `event_streams` | Stream identity, current revision and aggregate metadata. | Unique `(aggregate_type, aggregate_id)`; tenant scope immutable. |
+| `events` | Append-only event envelopes and payloads. | Unique `event_id`; unique `(stream_id, stream_revision)`; no application update/delete permission. |
+| `event_outbox` | Reliable publication to projection and worker consumers. | Written in the append transaction; delivery state is operational metadata, not business history. |
+| `projection_checkpoints` | Last processed global position per projection. | Consumer-specific; rebuildable. |
+| `projection_failures` | Quarantined processing errors and retry state. | Must never advance a checkpoint past an unhandled event. |
+| `snapshots` | Optional verified aggregate snapshots. | References stream revision and state hash; disposable optimisation. |
+| `event_integrity_checkpoints` | Periodic hash-chain roots and verification results. | Append-only verification history. |
+| `idempotency_records` | Command result binding for safe retry. | Unique tenant/actor/key scope; request hash prevents key reuse with different payload. |
+
+Database roles separate event append, event read, projection write, operations and backup privileges. The application role may insert events only through the event-store repository or a restricted database function. It may not update or delete historical event rows.
+
+## 26.6 Global ordering and stream ordering
+
+`stream_revision` is authoritative inside one aggregate. A database-generated global position provides deterministic projection order, but it must not be interpreted as the exact physical order of events across remote sites. Correlation and causation links explain cross-stream workflow relationships.
+
+Time-based reports use `occurred_at_utc` with clock-confidence information. Audit reconstruction uses stream revision and recorded global position. This distinction prevents unreliable station clocks from corrupting causal history.
+
+## 26.7 Projection architecture
+
+Each projection is a named, versioned consumer. Examples include:
+
+- Current session state.
+- Session search index.
+- Pharmacy dashboard.
+- Station/camera health.
+- Medicine profile catalogue.
+- Model and configuration registry.
+- Evidence timeline.
+- Security audit search.
+- Pilot and quality metrics.
+
+Projection code must be deterministic for a given event version and projection version. A projection can be rebuilt into a shadow table, compared, then atomically promoted. Projection failures are visible operational incidents. The user interface must expose projection lag when it could make displayed state stale.
+
+## 26.8 Snapshots
+
+Snapshots are a performance optimisation, not an authority. A snapshot records aggregate type, aggregate ID, stream revision, snapshot schema version, state payload, payload hash and the software version that created it. On load, P.C.A.I. verifies the snapshot hash and replays events after the snapshot revision. If validation fails, the snapshot is ignored and the full stream is replayed.
+
+No snapshot may contain a fact that cannot be reconstructed from its event stream. Snapshot deletion has no business effect.
+
+## 26.9 Event evolution
+
+Stored events are immutable. Schema evolution follows these rules:
+
+- Additive optional fields are preferred.
+- A semantic change requires a new `event_version`.
+- Upcasters transform old payloads into the current in-memory representation without modifying stored bytes.
+- Upcasters are pure, deterministic and covered by fixtures from every historical version.
+- Event type names are never recycled.
+- A deprecated event remains readable for as long as retained history depends on it.
+- Release compatibility tests replay representative historical streams before deployment.
+
+## 26.10 Corrections, reversals and redaction
+
+A mistaken event is followed by a correcting event that references it. For example, `decision.human.corrected` records the original proposed count, corrected count, correction reason, authorised actor and displayed evidence. Reports derive the effective value while replay preserves both.
+
+Where privacy policy permits or requires evidence-media deletion, P.C.A.I. deletes or cryptographically renders the eligible object inaccessible and emits `media.deletion.completed`. The audit event preserves object identifier, prior hash, policy, approval, deletion method and completion time without retaining the removed content. Business events are not deleted merely to hide an error.
+
+## 26.11 Integrity verification
+
+Event integrity uses several independent controls:
+
+- PostgreSQL transaction durability and restricted roles.
+- Per-event payload hashes.
+- Per-stream previous-hash chaining.
+- Periodic integrity checkpoints signed or copied to a separately protected backup location.
+- Object hashes for every evidence artefact.
+- Backup manifests containing event position and object hashes.
+- Scheduled verification that reports missing, altered, orphaned or unreferenced objects.
+
+Hash chaining detects modification but does not by itself prevent a privileged attacker from rewriting an entire chain. Separation of duties, protected backups, signed release/change history and external integrity checkpoints are therefore required.
+
+## 26.12 Replay guarantees
+
+P.C.A.I. defines four replay guarantees:
+
+1. **State replay:** reconstruct the effective aggregate state from events.
+2. **Historical audit replay:** show the event, evidence, model, policy, profile and configuration versions available at that time.
+3. **Projection replay:** rebuild any read model from an agreed event position.
+4. **Model re-evaluation:** run a later approved model on preserved observations and store the new result as a separate evaluation, never as a replacement for history.
+
+Deterministic replay applies to domain state and rule evaluation. Neural inference may vary across hardware/runtime versions; therefore a historical audit relies on the preserved original output and provenance, while a re-evaluation records its own runtime and variability.
+
+# 27. Data Architecture, Evidence Storage and Information Lifecycle
+
+## 27.1 Data architecture principles
+
+P.C.A.I. separates data by meaning, authority, mutability and retention need. The architecture does not place every object in PostgreSQL and does not treat the 2 TB SSD as permission to keep everything indefinitely.
+
+The binding principles are:
+
+- Domain history is event sourced.
+- Evidence media is immutable and content addressed.
+- Current-state projections are rebuildable.
+- Identity and access records use controlled transactional tables and events.
+- Technical telemetry is operational, bounded and separate from business evidence.
+- Training candidates are quarantined from production evidence.
+- Models, datasets, prompts, policies, profiles and knowledge are versioned artefacts.
+- Secrets are stored outside all ordinary data stores.
+- Tenant scope is present at every persistent boundary.
+- Retention is based on explicit policy, not disk availability.
+
+## 27.2 Canonical identifiers
+
+Internal identifiers use UUIDv7 or ULID consistently across the platform; the final choice is an ADR before schema implementation. Identifiers are opaque and never contain pharmacy, medicine, patient or user information.
+
+Human-readable codes such as `SES-20260726-000042` are presentation fields. They may be regenerated or changed without altering identity. External medicine identifiers are stored as versioned attributes with type, issuer, jurisdiction and provenance, not as primary keys.
+
+Every data reference includes:
+
+- Stable internal identifier.
+- Owning pharmacy where applicable.
+- Object or record version.
+- Creation event or provenance reference.
+- Classification and retention class.
+- Integrity hash when the referenced bytes or structured object must be immutable.
+
+## 27.3 Logical data classes
+
+| Class | Authority | Mutability | Example location | Retention owner |
+|---|---|---|---|---|
+| Domain events | Event store | Append only | PostgreSQL `events` | Governance/quality |
+| Evidence objects | Evidence repository | Immutable bytes; policy-controlled deletion | `/pcai-data/objects` | Pharmacy/privacy |
+| Projections | Derived | Rebuildable | PostgreSQL projection schemas | Application owner |
+| Identity credentials | Identity store | Controlled updates plus audit events | PostgreSQL + secret store | Security |
+| Medicine profiles | Versioned domain objects | New versions only after approval | PostgreSQL metadata + object storage | Medicine governance |
+| Model artefacts | Model registry | Immutable artefact; lifecycle status changes by event | `/pcai-data/models` | AI/ML governance |
+| Knowledge documents | Knowledge registry | Immutable version; approval and supersession | `/pcai-data/knowledge` | Knowledge governance |
+| Technical logs | Operational telemetry | Append/rotate/delete | `/pcai-data/logs` | Operations/security |
+| Metrics/traces | Operational telemetry | Time-series retention | Resource-bounded local telemetry store | Operations |
+| Training candidates | Quarantine dataset | Promotion through governed copies/versions | `/pcai-data/datasets/quarantine` | AI/ML + privacy |
+| Backups | Recovery copies | Append/rotate under policy | Separate encrypted target | Operations |
+| Secrets | Secret store | Rotate/revoke | Protected host/device secret mechanism | Security |
+
+## 27.4 Evidence object contract
+
+An evidence object is registered before it can be referenced by a decision. Its metadata includes:
+
+```json
+{
+  "object_id": "01J...",
+  "content_sha256": "sha256:...",
+  "byte_length": 18423017,
+  "media_type": "image/png",
+  "object_kind": "original_frame",
+  "tenant_id": "01J...",
+  "session_id": "01J...",
+  "station_id": "01J...",
+  "captured_at_utc": "2026-07-26T18:04:17.705Z",
+  "recorded_at_utc": "2026-07-26T18:04:18.021Z",
+  "source_device_id": "01J...",
+  "source_sequence": 18842,
+  "calibration_version": "cal-3",
+  "camera_configuration_hash": "sha256:...",
+  "encryption_key_reference": "evidence-key-v4",
+  "classification": "pharmacy_operational",
+  "retention_class": "session_evidence",
+  "derivation": {
+    "is_original": true,
+    "parent_object_ids": [],
+    "transformation": null
+  }
+}
+```
+
+Derived artefacts such as corrected images, tablet crops, masks, overlays and OCR crops reference their parents and the exact transformation software/configuration. An annotation overlay is never presented as the original frame. The browser clearly labels original and derived media.
+
+## 27.5 Atomic object registration
+
+Object bytes and business events live in different storage systems, so their relationship cannot rely on one database transaction. The required protocol is:
+
+1. Capture service computes the hash while streaming bytes.
+2. Bytes are written to a temporary, non-authoritative staging location.
+3. The stored bytes are read or otherwise verified against the hash.
+4. The object is atomically moved into the content-addressed repository.
+5. An object-registration row is committed.
+6. The domain command appends `observation.frame.captured` referencing the registered object.
+7. A reconciliation job removes expired unreferenced staging objects and reports registered objects without domain references.
+
+A session may not reach `COMPLETED` if required evidence objects are missing or fail integrity verification.
+
+## 27.6 Filesystem layout on the OWC SSD
+
+The approved logical layout is:
+
+```text
+/pcai-data/
+  database/
+    postgres/
+    logical-backup-staging/
+  events/
+    integrity-checkpoints/
+    export-manifests/
+  objects/
+    sha256/ab/cd/<full-hash>
+    staging/
+    quarantine/
+  models/
+    registry/
+    artifacts/
+    runtime-cache/
+  datasets/
+    quarantine/
+    approved/
+    benchmark/
+    manifests/
+  knowledge/
+    sources/
+    extracted/
+    indexes/
+  configuration/
+    approved/
+    runtime-cache/
+  logs/
+    application/
+    security/
+    system/
+  telemetry/
+  exports/
+  backups/
+    staging/
+  quarantine/
+```
+
+This is a logical contract; exact mount points and filesystem choice remain **PROPOSED** until the Jetson/OWC combination is tested for power-loss behaviour, permissions, encryption and sustained I/O. Containers receive only the subdirectories they require. The web and model runtimes do not receive the entire SSD as a writable volume.
+
+## 27.7 Encryption
+
+Transport encryption and storage encryption are separate controls. TLS protects data in motion. Filesystem, database or application-layer encryption protects data at rest. The first deployment must document:
 
 - Which volumes are encrypted.
 - Where keys reside.
