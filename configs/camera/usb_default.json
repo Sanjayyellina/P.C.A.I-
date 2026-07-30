@@ -1,0 +1,10 @@
+{
+  "camera_id": "usb-camera-0",
+  "source": 0,
+  "backend": "v4l2",
+  "width_px": 1920,
+  "height_px": 1080,
+  "fps": 30.0,
+  "buffer_size": 2,
+  "fourcc": "MJPG"
+}
