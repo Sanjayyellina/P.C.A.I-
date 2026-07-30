@@ -7,6 +7,11 @@ from .contracts import (
     FrameQualityReport,
     FrameQualityThresholds,
 )
+from .stability import (
+    StabilityMetrics,
+    StabilityThresholds,
+    TemporalFrameStability,
+)
 
 __all__ = [
     "FrameQualityAnalyzer",
@@ -14,4 +19,7 @@ __all__ = [
     "FrameQualityMetrics",
     "FrameQualityReport",
     "FrameQualityThresholds",
+    "StabilityMetrics",
+    "StabilityThresholds",
+    "TemporalFrameStability",
 ]
