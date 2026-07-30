@@ -1,0 +1,28 @@
+{
+  "profile_id": "phone_wood_v0",
+  "description": "Temporary phone-image setup using light Aleve tablets on a dark wooden base.",
+  "analysis": {
+    "maximum_dimension_px": 1600,
+    "colour_space": "LAB",
+    "object_polarity": "LIGHT"
+  },
+  "segmentation": {
+    "strategy": "LIGHTNESS_PERCENTILE",
+    "lightness_percentile": 88.0,
+    "opening_kernel_px": 5,
+    "closing_kernel_px": 11
+  },
+  "candidate_filter": {
+    "minimum_area_px2": 1000.0,
+    "minimum_circularity": 0.30,
+    "minimum_aspect_ratio": 0.40,
+    "maximum_aspect_ratio": 2.50
+  },
+  "limitations": [
+    "Temporary uncontrolled background",
+    "Phone position is not fixed",
+    "Lighting is not fixed",
+    "No calibrated tray geometry",
+    "Parameters must not be treated as production defaults"
+  ]
+}

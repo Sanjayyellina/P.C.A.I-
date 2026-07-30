@@ -1,0 +1,19 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+.venv/
+venv/
+
+# Test and tooling caches
+.pytest_cache/
+.coverage
+htmlcov/
+
+# IDE and OS metadata
+.vscode/
+.idea/
+.DS_Store
+._*

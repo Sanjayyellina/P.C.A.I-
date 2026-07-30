@@ -18,3 +18,7 @@ class InvalidImageError(PcaiError):
 
 class UnsupportedImageError(PcaiError):
     """Raised when a valid image falls outside the supported envelope."""
+
+
+class OperatingEnvelopeError(PcaiError):
+    """Raised when an observation falls outside the supported operating envelope."""
