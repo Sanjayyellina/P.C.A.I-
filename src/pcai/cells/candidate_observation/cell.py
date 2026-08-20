@@ -28,6 +28,7 @@ from pcai.cells.candidate_observation.contracts import (
     CandidateObservationInput,
     CandidateSet,
     CandidateStatus,
+    ForegroundPolarity,
 )
 from pcai.shared.errors import InvalidImageError, OperatingEnvelopeError
 from pcai.vision.contours import (
@@ -38,7 +39,11 @@ from pcai.vision.contours import (
 )
 from pcai.vision.masks import touches_mask_border
 from pcai.vision.morphology import close_mask, open_mask
-from pcai.vision.thresholding import binary_inverse_threshold, grayscale
+from pcai.vision.thresholding import (
+    binary_inverse_threshold,
+    binary_threshold,
+    grayscale,
+)
 
 
 class CandidateObservationCell(Protocol):
@@ -56,10 +61,21 @@ class DeterministicCandidateObservationCell:
         configuration = input_.configuration
 
         gray = grayscale(input_.canonical_tray_bgr)
-        foreground = binary_inverse_threshold(
-            gray,
-            threshold_value=configuration.foreground_threshold,
-        )
+        if configuration.foreground_polarity is ForegroundPolarity.DARK_ON_LIGHT:
+            foreground = binary_inverse_threshold(
+                gray,
+                threshold_value=configuration.foreground_threshold,
+            )
+        elif configuration.foreground_polarity is ForegroundPolarity.LIGHT_ON_DARK:
+            foreground = binary_threshold(
+                gray,
+                threshold_value=configuration.foreground_threshold,
+            )
+        else:
+            raise OperatingEnvelopeError(
+                code="FOREGROUND_POLARITY_INVALID",
+                message="Candidate observation requires a supported foreground polarity.",
+            )
         foreground = cv2.bitwise_and(foreground, input_.tray_mask)
         foreground = open_mask(
             foreground,

@@ -10,6 +10,7 @@ from pcai.cells.candidate_observation.contracts import (
     CandidateObservationInput,
     CandidateSet,
     CandidateStatus,
+    ForegroundPolarity,
 )
 
 __all__ = [
@@ -19,5 +20,6 @@ __all__ = [
     "CandidateObservationInput",
     "CandidateSet",
     "CandidateStatus",
+    "ForegroundPolarity",
     "DeterministicCandidateObservationCell",
 ]

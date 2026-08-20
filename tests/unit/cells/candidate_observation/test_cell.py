@@ -12,6 +12,7 @@ from pcai.cells.candidate_observation import (
     CandidateObservationInput,
     CandidateStatus,
     DeterministicCandidateObservationCell,
+    ForegroundPolarity,
 )
 from pcai.shared.identifiers import FrameId
 
@@ -53,6 +54,36 @@ def test_observes_three_isolated_candidates() -> None:
         "candidate-0002",
         "candidate-0003",
     ]
+
+
+def test_observes_light_tablets_on_a_dark_canonical_tray() -> None:
+    image = np.zeros((200, 300, 3), dtype=np.uint8)
+    for centre in ((60, 70), (150, 70), (240, 70)):
+        cv2.circle(image, centre, 12, (240, 240, 240), -1)
+
+    input_ = _input(image)
+    input_ = CandidateObservationInput(
+        frame_id=input_.frame_id,
+        canonical_tray_bgr=input_.canonical_tray_bgr,
+        tray_mask=input_.tray_mask,
+        pixels_per_mm_x=input_.pixels_per_mm_x,
+        pixels_per_mm_y=input_.pixels_per_mm_y,
+        configuration=CandidateConfiguration(
+            foreground_threshold=200,
+            morphology_kernel_px=3,
+            minimum_area_mm2=20.0,
+            maximum_single_area_mm2=500.0,
+            maximum_supported_area_mm2=2_000.0,
+            minimum_solidity_single=0.85,
+            touching_area_multiplier=1.25,
+            foreground_polarity=ForegroundPolarity.LIGHT_ON_DARK,
+        ),
+    )
+
+    result = DeterministicCandidateObservationCell().observe(input_)
+
+    assert len(result.candidates) == 3
+    assert all(candidate.status is CandidateStatus.SINGLE_CANDIDATE for candidate in result.candidates)
 
 
 def test_marks_border_intersection_as_partial_object() -> None:

@@ -24,3 +24,18 @@ def binary_inverse_threshold(
         cv2.THRESH_BINARY_INV,
     )
     return mask
+
+
+def binary_threshold(
+    gray: np.ndarray,
+    *,
+    threshold_value: int,
+) -> np.ndarray:
+    """Return a binary mask for pixels brighter than one explicit threshold."""
+    _value, mask = cv2.threshold(
+        gray,
+        threshold_value,
+        255,
+        cv2.THRESH_BINARY,
+    )
+    return mask

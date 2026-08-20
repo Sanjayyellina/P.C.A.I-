@@ -24,6 +24,13 @@ class CandidateStatus(StrEnum):
     UNKNOWN = "UNKNOWN"
 
 
+class ForegroundPolarity(StrEnum):
+    """Expected tablet contrast within the already-canonical tray image."""
+
+    DARK_ON_LIGHT = "DARK_ON_LIGHT"
+    LIGHT_ON_DARK = "LIGHT_ON_DARK"
+
+
 @dataclass(frozen=True, slots=True)
 class CandidateConfiguration:
     foreground_threshold: int
@@ -33,6 +40,7 @@ class CandidateConfiguration:
     maximum_supported_area_mm2: float
     minimum_solidity_single: float
     touching_area_multiplier: float
+    foreground_polarity: ForegroundPolarity = ForegroundPolarity.DARK_ON_LIGHT
 
 
 @dataclass(frozen=True, slots=True)
